@@ -93,5 +93,8 @@ Delete the custom resource
 
 See the operator logs ...
 
+# How to deliver solution
+Fork this into your public repo, provide link to your repo with any additional instructions on how to test 
+
 
 
