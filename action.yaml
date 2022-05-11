@@ -1,0 +1,11 @@
+apiVersion: core.opdemo.net/v1
+kind: Action
+metadata:
+  name: demo-action1
+spec:
+  phases:
+    - waiting
+    - running
+    - completed
+
+  
