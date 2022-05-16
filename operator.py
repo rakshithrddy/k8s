@@ -2,10 +2,10 @@ import os
 import kopf
 import pykube
 import logging
+
 from datetime import datetime
 from action import Action
-import yaml
-from kubernetes import kubernetes
+import time
 
 # init logger
 logger = logging.getLogger(os.path.basename(__file__))
@@ -36,46 +36,20 @@ def on_login(**kwargs):
     return kopf.login_with_kubeconfig(**kwargs)
 
 
-@kopf.on.create('action')
-def action_create(spec, name, namespace, patch, **_):
-    phases = spec.get('phases')
-    attr = {}
-    timestamps = []
-    if not phases:
-        raise kopf.PermanentError(f"Phases must be set. Got {phases!r}.")
-
-    for phase in phases:
-        attr[phase] = {
-            "phase": phase,
-        }
-        timestamps.append(
-            {
-                phase:  str(datetime.now())
-            }
-        )
-
-        logger.info(f"Updated status of phase {phase}")
-
-    # # "patch" parameter may be used to give a patch of the resource to kopf once the handler is finished.
-    # # Here for example we set a fixed delay for every new "Action" that is created, overwriting whatever may be set.
-
-    attr.update({'timestamps': timestamps})
-    patch["status"] = attr
-    patch['spec'] = {'delay': 5}
-
-
 @kopf.on.update('action')
-def action_update(name, namespace, patch, diff, **_):
+def action_update(name, namespace, patch, diff, spec, **_):
     logger.info(f"on update: name:{name} diff:{diff}")
-    _['status'].update({"updatedAt": str(datetime.now())})
+    delay = 0
+    if spec.get('delay'):
+        delay = spec.get('delay')
+    
+    timestamps = []
+    for phase in spec.get('phases'):
+        timestamps.append({phase: str(datetime.now())})
+        time.sleep(delay)
 
-
-@kopf.on.field('core.opdemo.net', 'v1', 'action', field='status')
-def action_status_change(name, namespace, diff, **_):
-    logger.info(f"on status change: name:{name} diff:{diff}")
-    # ac = pykubeSampleGetAction(namespace, name)
-    # pykubeSamplePatchAction(ac, {'status': {'iam': 'allwayshere'}}, subresource='status')
-
+    patch['status'] = {'timestamps': timestamps}
+    
 
 @kopf.on.delete('action')
 def action_delete(name, namespace, **_):
@@ -83,4 +57,25 @@ def action_delete(name, namespace, **_):
     if _.get('status'):
         _.pop('status')
 
-    logger.info(_)
+
+@kopf.on.create('action')
+def action_create(name, namespace, patch, spec, **_):
+    logger.info(f"on create: name:{name}")
+    # "patch" parameter may be used to give a patch of the resource to kopf once the handler is finished.
+    # Here for example we set a fixed delay for every new "Action" that is created, overwriting whatever may be set.
+    patch['spec'] = {'delay': 5}
+    if not spec.get('phases'):
+        raise kopf.PermanentError("No phases found")
+    
+    status = {}
+    for phase in spec.get('phases'):
+        status[phase] = {'phase': phase, 'created_on': str(datetime.now())}
+    
+    patch['status'] = status
+
+
+@kopf.on.field('core.opdemo.net', 'v1', 'action', field='status')
+def action_status_change(name, namespace, diff, **_):
+    logger.info(f"on status change: name:{name} diff:{diff}")
+    # ac = pykubeSampleGetAction(namespace, name)
+    # pykubeSamplePatchAction(ac, {'status': {'iam': 'allwayshere'}}, subresource='status')
